@@ -3,175 +3,218 @@ const express = require('express');
 const fs = require('fs');
 let router = express.Router();
 const pino = require("pino");
-const { default: makeWASocket, useMultiFileAuthState, delay, Browsers, makeCacheableSignalKeyStore, getAggregateVotesInPollMessage, DisconnectReason, WA_DEFAULT_EPHEMERAL, jidNormalizedUser, proto, getDevice, generateWAMessageFromContent, fetchLatestBaileysVersion, makeInMemoryStore, getContentType, generateForwardMessageContent, downloadContentFromMessage, jidDecode } = require('@whiskeysockets/baileys')
+const { 
+    default: makeWASocket, 
+    useMultiFileAuthState, 
+    delay, 
+    Browsers, 
+    makeCacheableSignalKeyStore,
+    DisconnectReason 
+} = require('@whiskeysockets/baileys');
 
 const { upload } = require('./mega');
+
 function removeFile(FilePath) {
     if (!fs.existsSync(FilePath)) return false;
     fs.rmSync(FilePath, { recursive: true, force: true });
 }
+
 router.get('/', async (req, res) => {
     const id = makeid();
     let num = req.query.number;
+    
+    // Validate phone number
+    if (!num || num.replace(/[^0-9]/g, '').length < 10) {
+        return res.send({ code: "Invalid phone number" });
+    }
+    
     async function MALVIN_XD_PAIR_CODE() {
         const {
             state,
             saveCreds
         } = await useMultiFileAuthState('./temp/' + id);
+        
         try {
-var items = ["Safari"];
-function selectRandomItem(array) {
-  var randomIndex = Math.floor(Math.random() * array.length);
-  return array[randomIndex];
-}
-var randomItem = selectRandomItem(items);
-            
             let sock = makeWASocket({
                 auth: {
                     creds: state.creds,
-                    keys: makeCacheableSignalKeyStore(state.keys, pino({ level: "fatal" }).child({ level: "fatal" })),
+                    keys: makeCacheableSignalKeyStore(state.keys, pino({ level: "silent" }).child({ level: "silent" })),
                 },
                 printQRInTerminal: false,
-                generateHighQualityLinkPreview: true,
-                logger: pino({ level: "fatal" }).child({ level: "fatal" }),
-                syncFullHistory: false,
-                browser: Browsers.macOS(randomItem)
+                logger: pino({ level: "silent" }).child({ level: "silent" }),
+                browser: Browsers.ubuntu("Chrome"),
+                getMessage: async (key) => {
+                    return { conversation: 'hello' }
+                }
             });
+            
+            // Request pairing code
             if (!sock.authState.creds.registered) {
                 await delay(1500);
                 num = num.replace(/[^0-9]/g, '');
-                const code = await sock.requestPairingCode(num);
-                if (!res.headersSent) {
-                    await res.send({ code });
+                
+                try {
+                    const code = await sock.requestPairingCode(num);
+                    console.log(`🔑 Pairing code for ${num}: ${code}`);
+                    
+                    // Send code to user immediately
+                    if (!res.headersSent) {
+                        res.send({ code });
+                    }
+                } catch (err) {
+                    console.error('Error requesting pairing code:', err);
+                    if (!res.headersSent) {
+                        res.send({ code: "Error generating code" });
+                    }
+                    await removeFile('./temp/' + id);
+                    return;
                 }
             }
+            
+            // Save credentials when updated
             sock.ev.on('creds.update', saveCreds);
-            sock.ev.on("connection.update", async (s) => {
-
-    const {
-                    connection,
-                    lastDisconnect
-                } = s;
+            
+            // Handle connection updates
+            sock.ev.on("connection.update", async (update) => {
+                const { connection, lastDisconnect, qr } = update;
                 
-                if (connection == "open") {
-                    await delay(5000);
-                    let data = fs.readFileSync(__dirname + `/temp/${id}/creds.json`);
+                console.log('Connection status:', connection);
+                
+                if (connection === "open") {
+                    console.log('✅ Connected! User:', sock.user.id);
+                    
+                    // Wait a bit for connection to stabilize
+                    await delay(3000);
+                    
                     let rf = __dirname + `/temp/${id}/creds.json`;
-                    function generateRandomText() {
-                        const prefix = "3EB";
-                        const characters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
-                        let randomText = prefix;
-                        for (let i = prefix.length; i < 22; i++) {
-                            const randomIndex = Math.floor(Math.random() * characters.length);
-                            randomText += characters.charAt(randomIndex);
-                        }
-                        return randomText;
+                    
+                    // Check if file exists
+                    if (!fs.existsSync(rf)) {
+                        console.error('❌ Credentials file not found!');
+                        await sock.sendMessage(sock.user.id, { 
+                            text: '⚠️ Error: Session file not found. Please try again.' 
+                        });
+                        await sock.ws.close();
+                        return;
                     }
-                    const randomText = generateRandomText();
+                    
                     try {
-
-
-                        
-                        const { upload } = require('./mega');
+                        console.log('📤 Uploading session to MEGA...');
                         const mega_url = await upload(fs.createReadStream(rf), `${sock.user.id}.json`);
+                        
+                        if (!mega_url) {
+                            throw new Error('MEGA upload returned empty URL');
+                        }
+                        
                         const string_session = mega_url.replace('https://mega.nz/file/', '');
-                        let md = "Groq~" + string_session;
-                        let code = await sock.sendMessage(sock.user.id, { text: md });
-                        let desc = `*Hey there, Groq User!* 👋🏻
+                        let sessionId = "Malvin~" + string_session;
+                        
+                        console.log('✅ Upload successful');
+                        
+                        // Send session ID
+                        await sock.sendMessage(sock.user.id, { text: sessionId });
+                        
+                        // Send welcome message
+                        let desc = `*🎉 MALVIN-XD Connected Successfully!*
 
-Thanks for using *Groq* — your session has been successfully created!
+✅ Your session has been created and uploaded securely.
 
-🔐 *Session ID:* Sent above  
-⚠️ *Keep it safe!* Do NOT share this ID with anyone.
+🔐 *Session ID:* See message above
+⚠️ *KEEP IT PRIVATE!* Never share with anyone.
 
-——————
+━━━━━━━━━━━━━━━━
 
-*✅ Stay Updated:*  
-Join our official WhatsApp Channel:  
+📢 *Official Channel:*
 https://whatsapp.com/channel/0029VbA6MSYJUM2TVOzCSb2A
 
-*💻 Source Code:*  
-Fork & explore the project on GitHub:  
+💻 *Source Code:*
 https://github.com/XdKing2/MALVIN-XD
 
-——————
-
-> *© Powered by Alex Macksyn*
-Stay cool and hack smart. ✌🏻`; 
+━━━━━━━━━━━━━━━━
+© Powered by Malvin King`;
+                        
                         await sock.sendMessage(sock.user.id, {
-text: desc,
-contextInfo: {
-externalAdReply: {
-title: "ᴍᴀʟᴠɪɴ-xᴅ",
-thumbnailUrl: "https://files.catbox.moe/bqs70b.jpg",
-sourceUrl: "https://whatsapp.com/channel/0029VbA6MSYJUM2TVOzCSb2A",
-mediaType: 1,
-renderLargerThumbnail: true
-}  
-}
-},
-{quoted:code })
-                    } catch (e) {
-                            let ddd = sock.sendMessage(sock.user.id, { text: e });
-                            let desc = `Hey there, Groq User!* 👋🏻
-
-Thanks for using *Groq* — your session has been successfully created!
-
-🔐 *Session ID:* Sent above  
-⚠️ *Keep it safe!* Do NOT share this ID with anyone.
-
-——————
-
-*✅ Stay Updated:*  
-Join our official WhatsApp Channel:  
-https://whatsapp.com/channel/0029VbA6MSYJUM2TVOzCSb2A
-
-*💻 Source Code:*  
-Fork & explore the project on GitHub:  
-https://github.com/XdKing2/MALVIN-XD
-
-——————
-
-> *© Powered by ALEX MACKSYN*
-Stay cool and hack smart. ✌🏻`;
-                            await sock.sendMessage(sock.user.id, {
-text: desc,
-contextInfo: {
-externalAdReply: {
-title: "ᴍᴀʟᴠɪɴ-xᴅ",
-thumbnailUrl: "https://i.imgur.com/GVW7aoD.jpeg",
-sourceUrl: "https://whatsapp.com/channel/0029VbA6MSYJUM2TVOzCSb2A",
-mediaType: 2,
-renderLargerThumbnail: true,
-showAdAttribution: true
-}  
-}
-},
-{quoted:ddd })
+                            text: desc,
+                            contextInfo: {
+                                externalAdReply: {
+                                    title: "MALVIN-XD Session Generator",
+                                    body: "Session Created Successfully ✅",
+                                    thumbnailUrl: "https://files.catbox.moe/bqs70b.jpg",
+                                    sourceUrl: "https://whatsapp.com/channel/0029VbA6MSYJUM2TVOzCSb2A",
+                                    mediaType: 1,
+                                    renderLargerThumbnail: true
+                                }  
+                            }
+                        });
+                        
+                        console.log(`✅ Session sent to ${sock.user.id}`);
+                        
+                    } catch (uploadError) {
+                        console.error('❌ Upload error:', uploadError);
+                        
+                        // Fallback: send creds directly (not recommended but works)
+                        try {
+                            const credsData = fs.readFileSync(rf, 'utf8');
+                            const base64Creds = Buffer.from(credsData).toString('base64');
+                            
+                            await sock.sendMessage(sock.user.id, { 
+                                text: `⚠️ MEGA upload failed. Here's your session data (base64):\n\n${base64Creds}\n\nStore this safely!` 
+                            });
+                        } catch (fallbackError) {
+                            await sock.sendMessage(sock.user.id, { 
+                                text: `❌ Critical error: ${uploadError.message}\n\nPlease try again.` 
+                            });
+                        }
                     }
-                    await delay(10);
+                    
+                    // Clean up and close
+                    await delay(2000);
                     await sock.ws.close();
                     await removeFile('./temp/' + id);
-                    console.log(`👤 ${sock.user.id} 𝗖𝗼𝗻𝗻𝗲𝗰𝘁𝗲𝗱 ✅ 𝗥𝗲𝘀𝘁𝗮𝗿𝘁𝗶𝗻𝗴 𝗽𝗿𝗼𝗰𝗲𝘀𝘀...`);
-                    await delay(10);
-                    process.exit();
-                } else if (connection === "close" && lastDisconnect && lastDisconnect.error && lastDisconnect.error.output.statusCode != 401) {
-                    await delay(10);
-                    MALVIN_XD_PAIR_CODE();
+                    
+                } else if (connection === "close") {
+                    const statusCode = lastDisconnect?.error?.output?.statusCode;
+                    const reason = lastDisconnect?.error?.output?.payload?.error;
+                    
+                    console.log('❌ Connection closed. Code:', statusCode, 'Reason:', reason);
+                    
+                    // Don't reconnect if logged out or bad session
+                    if (statusCode === DisconnectReason.loggedOut) {
+                        console.log('User logged out');
+                        await removeFile('./temp/' + id);
+                        return;
+                    }
+                    
+                    if (statusCode === 401 || statusCode === 403) {
+                        console.log('Authentication failed');
+                        await removeFile('./temp/' + id);
+                        return;
+                    }
+                    
+                    // Reconnect for other errors
+                    if (statusCode !== DisconnectReason.loggedOut) {
+                        console.log('🔄 Attempting to reconnect...');
+                        await delay(2000);
+                        MALVIN_XD_PAIR_CODE();
+                    }
                 }
             });
+            
+            // Handle messaging errors
+            sock.ev.on('messages.upsert', async () => {});
+            
         } catch (err) {
-            console.log("service restated");
+            console.error("❌ Service error:", err.message);
+            console.error(err.stack);
             await removeFile('./temp/' + id);
+            
             if (!res.headersSent) {
-                await res.send({ code: "❗ Service Unavailable" });
+                res.send({ code: "Service Error: " + err.message });
             }
         }
     }
-   return await MALVIN_XD_PAIR_CODE();
-});/*
-setInterval(() => {
-    console.log("☘️ 𝗥𝗲𝘀𝘁𝗮𝗿𝘁𝗶𝗻𝗴 𝗽𝗿𝗼𝗰𝗲𝘀𝘀...");
-    process.exit();
-}, 180000); //30min*/
+    
+    return await MALVIN_XD_PAIR_CODE();
+});
+
 module.exports = router;
