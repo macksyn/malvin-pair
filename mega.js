@@ -1,8 +1,6 @@
 const mega = require("megajs");
-
-// Use environment variables for security
-const email = process.env.MEGA_EMAIL || 'your-email@example.com';
-const pw = process.env.MEGA_PASSWORD || 'your-password';
+let email = 'macksyn007@gmail.com' //oyage mega.nz acount eke email eka
+let pw = '5PRJu!L_QsbdT3:' //oyage mega.nz acount eke password eka
 
 const auth = {
   email: email,
@@ -18,9 +16,9 @@ const upload = (fileStream, fileName) => {
           name: fileName,
           allowUploadBuffering: true
         };
-        
+
         fileStream.pipe(storage.upload(uploadOptions));
-        
+
         storage.on('add', file => {
           file.link((err, url) => {
             if (err) {

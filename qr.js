@@ -12,7 +12,8 @@ const {
     Browsers,
     DisconnectReason
 } = require("@whiskeysockets/baileys");
-const { upload } = require('./mega');
+
+// MEGA upload removed - no longer needed
 
 function removeFile(FilePath) {
     if (!fs.existsSync(FilePath)) return false;
@@ -21,13 +22,13 @@ function removeFile(FilePath) {
 
 router.get('/', async (req, res) => {
     const id = makeid();
-    
+
     async function MALVIN_XD_QR_CODE() {
         const {
             state,
             saveCreds
         } = await useMultiFileAuthState('./temp/' + id);
-        
+
         try {
             let sock = makeWASocket({
                 auth: {
@@ -41,16 +42,16 @@ router.get('/', async (req, res) => {
                     return { conversation: 'hello' }
                 }
             });
-            
+
             sock.ev.on('creds.update', saveCreds);
-            
+
             sock.ev.on("connection.update", async (s) => {
                 const {
                     connection,
                     lastDisconnect,
                     qr
                 } = s;
-                
+
                 // Send QR code to browser
                 if (qr) {
                     console.log('📱 QR Code generated');
@@ -63,41 +64,50 @@ router.get('/', async (req, res) => {
                         }
                     }
                 }
-                
+
                 if (connection == "open") {
                     console.log('✅ Connected! User:', sock.user.id);
-                    await delay(3000);
-                    
+
+                    // Wait for connection to stabilize and creds to save
+                    await delay(5000);
+
                     let rf = __dirname + `/temp/${id}/creds.json`;
-                    
+
                     if (!fs.existsSync(rf)) {
                         console.error('❌ Credentials file not found!');
-                        await sock.sendMessage(sock.user.id, { 
-                            text: '⚠️ Error: Session file not found. Please try again.' 
-                        });
-                        await sock.ws.close();
                         await removeFile('./temp/' + id);
                         return;
                     }
-                    
-                    try {
-                        console.log('📤 Uploading session to MEGA...');
-                        const mega_url = await upload(fs.createReadStream(rf), `${sock.user.id}.json`);
-                        
-                        if (!mega_url) {
-                            throw new Error('MEGA upload returned empty URL');
-                        }
-                        
-                        const string_session = mega_url.replace('https://mega.nz/file/', '');
-                        let sessionId = "Malvin~" + string_session;
-                        
-                        console.log('✅ Upload successful');
-                        
-                        await sock.sendMessage(sock.user.id, { text: sessionId });
-                        
-                        let desc = `*🎉 MALVIN-XD Connected Successfully!*
 
-✅ Your session has been created and uploaded securely.
+                    // Extract phone number from sock.user.id
+                    const phoneNumber = sock.user.id.split(':')[0];
+                    const recipientJid = `${phoneNumber}@s.whatsapp.net`;
+
+                    console.log('📱 Sending to:', recipientJid);
+
+                    try {
+                        console.log('📤 Preparing session data...');
+
+                        // Read and encode credentials to base64
+                        const credsData = fs.readFileSync(rf, 'utf8');
+                        const base64Creds = Buffer.from(credsData).toString('base64');
+
+                        // Create session ID with base64 prefix
+                        let sessionId = "Groq~" + base64Creds;
+
+                        console.log('✅ Session data prepared');
+
+                        // Send session ID
+                        await sock.sendMessage(recipientJid, { text: sessionId });
+                        console.log('✅ Session ID sent');
+
+                        // Wait a bit before sending the welcome message
+                        await delay(2000);
+
+                        // Send welcome message
+                        let desc = `*🎉 Groq AI Connected Successfully!*
+
+✅ Your session has been created and sent securely.
 
 🔐 *Session ID:* See message above
 ⚠️ *KEEP IT PRIVATE!* Never share with anyone.
@@ -111,9 +121,9 @@ https://whatsapp.com/channel/0029VbA6MSYJUM2TVOzCSb2A
 https://github.com/XdKing2/MALVIN-XD
 
 ━━━━━━━━━━━━━━━━
-© Powered by Malvin King`;
-                        
-                        await sock.sendMessage(sock.user.id, {
+© Powered by Alex Macksyn`;
+
+                        await sock.sendMessage(recipientJid, {
                             text: desc,
                             contextInfo: {
                                 externalAdReply: {
@@ -126,41 +136,38 @@ https://github.com/XdKing2/MALVIN-XD
                                 }  
                             }
                         });
-                        
-                        console.log(`✅ Session sent to ${sock.user.id}`);
-                        
-                    } catch (uploadError) {
-                        console.error('❌ Upload error:', uploadError);
-                        
+
+                        console.log(`✅ Welcome message sent to ${recipientJid}`);
+
+                    } catch (sendError) {
+                        console.error('❌ Error sending session:', sendError);
+
+                        // Try to send error notification
                         try {
-                            const credsData = fs.readFileSync(rf, 'utf8');
-                            const base64Creds = Buffer.from(credsData).toString('base64');
-                            
-                            await sock.sendMessage(sock.user.id, { 
-                                text: `⚠️ MEGA upload failed. Here's your session data (base64):\n\n${base64Creds}\n\nStore this safely!` 
+                            await sock.sendMessage(recipientJid, { 
+                                text: `❌ Critical error: ${sendError.message}\n\nPlease try again.` 
                             });
-                        } catch (fallbackError) {
-                            await sock.sendMessage(sock.user.id, { 
-                                text: `❌ Critical error: ${uploadError.message}\n\nPlease try again.` 
-                            });
+                        } catch (notifyError) {
+                            console.error('❌ Failed to send error notification:', notifyError);
                         }
                     }
-                    
-                    await delay(2000);
+
+                    // Clean up and close
+                    await delay(3000);
                     await sock.ws.close();
                     await removeFile('./temp/' + id);
-                    
+
                 } else if (connection === "close") {
                     const statusCode = lastDisconnect?.error?.output?.statusCode;
-                    
+
                     console.log('❌ Connection closed. Code:', statusCode);
-                    
-                    if (statusCode === DisconnectReason.loggedOut || statusCode === 401 || statusCode === 403) {
-                        console.log('Authentication failed or logged out');
+
+                    if (statusCode === DisconnectReason.loggedOut || statusCode === 401 || statusCode === 403 || statusCode === 428) {
+                        console.log('Authentication failed or logged out or QR timeout');
                         await removeFile('./temp/' + id);
                         return;
                     }
-                    
+
                     if (statusCode !== DisconnectReason.loggedOut) {
                         console.log('🔄 Attempting to reconnect...');
                         await delay(2000);
@@ -168,17 +175,17 @@ https://github.com/XdKing2/MALVIN-XD
                     }
                 }
             });
-            
+
         } catch (err) {
             console.error("❌ Service error:", err.message);
             await removeFile('./temp/' + id);
-            
+
             if (!res.headersSent) {
                 res.send({ code: "Service Error: " + err.message });
             }
         }
     }
-    
+
     await MALVIN_XD_QR_CODE();
 });
 
