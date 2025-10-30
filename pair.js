@@ -1,18 +1,24 @@
-const { makeid } = require('./gen-id');
-const express = require('express');
-const fs = require('fs');
-let router = express.Router();
-const pino = require("pino");
-const { 
-    default: makeWASocket, 
-    useMultiFileAuthState, 
-    delay, 
-    Browsers, 
-    makeCacheableSignalKeyStore,
-    DisconnectReason 
-} = require('@whiskeysockets/baileys');
+import { makeid } from './gen-id.js'; // Note: Added .js extension
+import express from 'express';
+import fs from 'fs';
+import pino from "pino";
+import path from 'path'; // Added for __dirname
+import { fileURLToPath } from 'url'; // Added for __dirname
 
-// MEGA upload removed - no longer needed
+// 1. Converted Baileys import
+import makeWASocket, {
+    useMultiFileAuthState,
+    delay,
+    Browsers,
+    makeCacheableSignalKeyStore,
+    DisconnectReason
+} from '@whiskeysockets/baileys';
+
+// 2. Replaced __dirname
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+let router = express.Router();
 
 function removeFile(FilePath) {
     if (!fs.existsSync(FilePath)) return false;
@@ -86,7 +92,8 @@ router.get('/', async (req, res) => {
                     // Wait for connection to stabilize and creds to save
                     await delay(5000);
 
-                    let rf = __dirname + `/temp/${id}/creds.json`;
+                    // 3. __dirname is now defined and will work here
+                    let rf = path.join(__dirname, `temp/${id}/creds.json`);
 
                     // Check if file exists
                     if (!fs.existsSync(rf)) {
@@ -149,7 +156,7 @@ https://github.com/XdKing2/MALVIN-XD
                                     sourceUrl: "https://whatsapp.com/channel/0029VbA6MSYJUM2TVOzCSb2A",
                                     mediaType: 1,
                                     renderLargerThumbnail: true
-                                }  
+                                }
                             }
                         });
 
@@ -160,8 +167,8 @@ https://github.com/XdKing2/MALVIN-XD
 
                         // Try to send error notification
                         try {
-                            await sock.sendMessage(recipientJid, { 
-                                text: `❌ Critical error: ${sendError.message}\n\nPlease try again.` 
+                            await sock.sendMessage(recipientJid, {
+                                text: `❌ Critical error: ${sendError.message}\n\nPlease try again.`
                             });
                         } catch (notifyError) {
                             console.error('❌ Failed to send error notification:', notifyError);
@@ -198,7 +205,7 @@ https://github.com/XdKing2/MALVIN-XD
             });
 
             // Handle messaging errors
-            sock.ev.on('messages.upsert', async () => {});
+            sock.ev.on('messages.upsert', async () => { });
 
         } catch (err) {
             console.error("❌ Service error:", err.message);
@@ -214,4 +221,5 @@ https://github.com/XdKing2/MALVIN-XD
     return await MALVIN_XD_PAIR_CODE();
 });
 
-module.exports = router;
+// 4. Converted to export default
+export default router;

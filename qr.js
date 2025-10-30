@@ -1,19 +1,25 @@
-const { makeid } = require('./gen-id');
-const express = require('express');
-const QRCode = require('qrcode');
-const fs = require('fs');
-let router = express.Router();
-const pino = require("pino");
-const {
-    default: makeWASocket,
+import { makeid } from './gen-id.js'; // Note: Added .js extension
+import express from 'express';
+import QRCode from 'qrcode';
+import fs from 'fs';
+import pino from "pino";
+import path from 'path'; // Added for __dirname
+import { fileURLToPath } from 'url'; // Added for __dirname
+
+// 1. Converted Baileys import
+import makeWASocket, {
     useMultiFileAuthState,
     delay,
     makeCacheableSignalKeyStore,
     Browsers,
     DisconnectReason
-} = require("@whiskeysockets/baileys");
+} from "@whiskeysockets/baileys";
 
-// MEGA upload removed - no longer needed
+// 2. Replaced __dirname
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+let router = express.Router();
 
 function removeFile(FilePath) {
     if (!fs.existsSync(FilePath)) return false;
@@ -57,6 +63,7 @@ router.get('/', async (req, res) => {
                     console.log('📱 QR Code generated');
                     if (!res.headersSent) {
                         try {
+                            // 3. QRCode.toBuffer is correct
                             const qrImage = await QRCode.toBuffer(qr);
                             res.end(qrImage);
                         } catch (err) {
@@ -71,7 +78,8 @@ router.get('/', async (req, res) => {
                     // Wait for connection to stabilize and creds to save
                     await delay(5000);
 
-                    let rf = __dirname + `/temp/${id}/creds.json`;
+                    // 4. __dirname is now defined and will work here
+                    let rf = path.join(__dirname, `temp/${id}/creds.json`);
 
                     if (!fs.existsSync(rf)) {
                         console.error('❌ Credentials file not found!');
@@ -133,7 +141,7 @@ https://github.com/XdKing2/MALVIN-XD
                                     sourceUrl: "https://whatsapp.com/channel/0029VbA6MSYJUM2TVOzCSb2A",
                                     mediaType: 1,
                                     renderLargerThumbnail: true
-                                }  
+                                }
                             }
                         });
 
@@ -144,8 +152,8 @@ https://github.com/XdKing2/MALVIN-XD
 
                         // Try to send error notification
                         try {
-                            await sock.sendMessage(recipientJid, { 
-                                text: `❌ Critical error: ${sendError.message}\n\nPlease try again.` 
+                            await sock.sendMessage(recipientJid, {
+                                text: `❌ Critical error: ${sendError.message}\n\nPlease try again.`
                             });
                         } catch (notifyError) {
                             console.error('❌ Failed to send error notification:', notifyError);
@@ -189,4 +197,5 @@ https://github.com/XdKing2/MALVIN-XD
     await MALVIN_XD_QR_CODE();
 });
 
-module.exports = router;
+// 5. Converted to export default
+export default router;
